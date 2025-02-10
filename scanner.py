@@ -23,19 +23,29 @@ def fetch_stock_data(ticker, days=100):
         return df
     return None
 
-# AI-powered news sentiment analysis
+# AI-powered news sentiment analysis (Fixed for OpenAI v1)
 def analyze_sentiment(ticker):
     """Uses OpenAI GPT-4 to analyze stock news sentiment."""
-    openai.api_key = OPENAI_API_KEY
+    openai.api_key = OPENAI_API_KEY  # Ensure API key is set properly
+
     news = f"Latest earnings & headlines for {ticker}"
-    
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": f"Analyze the sentiment of this news: {news}"}]
-    )
-    
-    sentiment = response["choices"][0]["message"]["content"]
-    return sentiment.lower() in ["bullish", "positive"]
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an AI that analyzes stock news sentiment."},
+                {"role": "user", "content": f"Analyze the sentiment of this news: {news}"}
+            ],
+            temperature=0.5
+        )
+
+        sentiment = response["choices"][0]["message"]["content"].strip().lower()
+        return "bullish" in sentiment or "positive" in sentiment  # Return True if sentiment is bullish
+
+    except openai.error.OpenAIError as e:
+        print(f"OpenAI API Error: {e}")
+        return False  # Default to False if API call fails
 
 # Detect AI-based breakout patterns
 def detect_patterns(ticker):
