@@ -1,45 +1,92 @@
-import streamlit as st
+import requests
 import pandas as pd
-from scanner import detect_patterns, dynamic_support_resistance, analyze_sentiment, momentum_confirmation, stop_loss_exit
+import numpy as np
+import ta
+import openai
+from datetime import datetime, timedelta
+from polygon import RESTClient
+from config import POLYGON_API_KEY, OPENAI_API_KEY
 
-# Streamlit Title
-st.title("🚀 AI-Powered Swing Trading Scanner")
-
-# File Uploader for CSV
-uploaded_file = st.file_uploader("Upload TradingView Stock List (CSV)", type=["csv"])
-
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+# Fetch stock data from Polygon.io
+def fetch_stock_data(ticker, days=100):
+    """Fetches historical stock data from Polygon.io."""
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
     
-    # Ensure the CSV file contains either "Tickers" or "Symbol" columns
-    if "Tickers" in df.columns:
-        stocks = df["Tickers"].tolist()
-    elif "Symbol" in df.columns:
-        stocks = df["Symbol"].tolist()
-    else:
-        st.error("CSV file must contain either a 'Tickers' or 'Symbol' column.")
-        st.stop()  # Stop execution if columns are missing
+    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}?adjusted=true&sort=asc&apiKey={POLYGON_API_KEY}"
+    
+    response = requests.get(url).json()
+    if 'results' in response:
+        df = pd.DataFrame(response['results'])
+        df['date'] = pd.to_datetime(df['t'])
+        df.set_index('date', inplace=True)
+        return df
+    return None
 
-    # Process stocks
-    for stock in stocks:
-        st.subheader(f"📌 {stock}")
-        
-        patterns = detect_patterns(stock)
-        if patterns:
-            st.info(f"📊 Patterns Detected: {patterns}")
+# AI-powered news sentiment analysis
+def analyze_sentiment(ticker):
+    """Uses OpenAI GPT-4 to analyze stock news sentiment."""
+    openai.api_key = OPENAI_API_KEY
+    news = f"Latest earnings & headlines for {ticker}"
+    
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": f"Analyze the sentiment of this news: {news}"}]
+    )
+    
+    sentiment = response["choices"][0]["message"]["content"]
+    return sentiment.lower() in ["bullish", "positive"]
 
-        if dynamic_support_resistance(stock):
-            st.success("🔥 Stock Near Breakout Zone")
+# Detect AI-based breakout patterns
+def detect_patterns(ticker):
+    """Detects bullish chart patterns using AI & technical analysis."""
+    df = fetch_stock_data(ticker, days=200)
+    if df is None:
+        return None
 
-        if analyze_sentiment(stock):
-            st.success("📈 AI Confirms Bullish Sentiment")
+    df["20SMA"] = ta.trend.SMAIndicator(df["c"], window=20).sma_indicator()
+    df["50SMA"] = ta.trend.SMAIndicator(df["c"], window=50).sma_indicator()
 
-        if momentum_confirmation(stock):
-            st.success("⚡ Momentum Confirmation (RSI, MACD)")
+    patterns = []
+    
+    if df["c"].iloc[-1] > df["20SMA"].iloc[-1] and df["20SMA"].iloc[-1] > df["50SMA"].iloc[-1]:
+        patterns.append("Bullish Trend Detected")
 
-        stop_loss = stop_loss_exit(stock)
-        if stop_loss:
-            st.warning(f"🚨 AI Stop-Loss: ${stop_loss:.2f}")
+    return patterns if patterns else None
 
-    st.write("📊 AI-Confirmed Pre-Breakout Stocks Ready for Trade.")
+# AI-driven support & resistance
+def dynamic_support_resistance(ticker):
+    """Detects AI-driven support & resistance levels."""
+    df = fetch_stock_data(ticker, days=100)
+    if df is None:
+        return None
+
+    df['Support'] = df['c'].rolling(window=20).min()
+    df['Resistance'] = df['c'].rolling(window=20).max()
+
+    return df['c'].iloc[-1] >= (0.98 * df['Resistance'].iloc[-1])
+
+# Confirm breakout with momentum indicators
+def momentum_confirmation(ticker):
+    """Checks RSI, MACD, and ATR expansion for confirmation."""
+    df = fetch_stock_data(ticker, days=50)
+    if df is None:
+        return None
+
+    df["RSI"] = ta.momentum.RSIIndicator(df["c"]).rsi()
+    df["MACD"] = ta.trend.MACD(df["c"]).macd()
+    df["ATR"] = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range()
+
+    return df["RSI"].iloc[-1] > 60 and df["MACD"].iloc[-1] > df["MACD"].iloc[-2]
+
+# AI-based stop-loss calculation
+def stop_loss_exit(ticker):
+    """Calculates AI-based stop-loss using ATR and swing lows."""
+    df = fetch_stock_data(ticker, days=50)
+    if df is None:
+        return None
+
+    df["ATR"] = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range()
+    return df["c"].iloc[-1] - (2 * df["ATR"].iloc[-1])
+
 
