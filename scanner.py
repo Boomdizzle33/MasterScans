@@ -9,8 +9,12 @@ from duckduckgo_search import DDGS
 from transformers import pipeline
 from bs4 import BeautifulSoup
 
-# ✅ Initialize FinBERT Sentiment Model
-finbert = pipeline("text-classification", model="ProsusAI/finbert")
+# ✅ Load FinBERT Model (Preventing Crashes)
+try:
+    finbert = pipeline("text-classification", model="ProsusAI/finbert", device=-1)  # Run on CPU (safe mode)
+except Exception as e:
+    print(f"⚠️ FinBERT loading failed: {e}")
+    finbert = None  
 
 # ✅ Fetch Stock Data from Polygon.io
 def fetch_stock_data(ticker, days=100):
@@ -41,7 +45,7 @@ def fetch_duckduckgo_news(ticker):
 
 # ✅ Fetch News from Yahoo Finance
 def fetch_yahoo_finance_news(ticker):
-    """Fetches news from Yahoo Finance API."""
+    """Fetches news from Yahoo Finance."""
     url = f"https://finance.yahoo.com/quote/{ticker}/news?p={ticker}"
     headers = {"User-Agent": "Mozilla/5.0"}  
     
@@ -85,6 +89,16 @@ def weighted_sentiment_score(ticker):
     
     return round(weighted_score, 2)
 
+# ✅ Dynamic Stop-Loss Calculation
+def dynamic_stop_loss(ticker):
+    """Calculates a dynamic stop-loss based on volatility (ATR) and volume contraction."""
+    df = fetch_stock_data(ticker, days=50)
+    if df is None:
+        return None
+
+    atr = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range().iloc[-1]
+    return df["c"].iloc[-1] - (1.5 * atr) if True else df["c"].iloc[-1] - (2.5 * atr)
+
 # ✅ Rank & Return Top 10 Pre-Breakout Setups
 def rank_best_trades(stocks):
     trade_data = []
@@ -96,7 +110,7 @@ def rank_best_trades(stocks):
         
         resistance = df['c'].rolling(20).max().iloc[-1]
         entry_price = resistance * 0.99  
-        stop_loss = dynamic_stop_loss(stock)
+        stop_loss = dynamic_stop_loss(stock)  
         exit_target = entry_price + (3 * (entry_price - stop_loss))  
 
         sentiment_score = weighted_sentiment_score(stock)  
