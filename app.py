@@ -4,7 +4,7 @@ import time
 import matplotlib.pyplot as plt
 from scanner import rank_best_trades, fetch_stock_data, fetch_duckduckgo_news
 
-# ✅ Set Page Title
+# ✅ Set Streamlit Page Configuration
 st.set_page_config(page_title="🚀 AI Breakout Scanner", layout="wide")
 
 st.title("🚀 AI-Powered Swing Trading Scanner - Top 10 Pre-Breakout Setups")
@@ -21,17 +21,29 @@ if uploaded_file is not None:
         st.error("❌ CSV file must contain a 'Ticker' column.")
         st.stop()
 
-    # ✅ Progress Bar
+    # ✅ Initialize Progress Bar & Timer
     progress_bar = st.progress(0)
     status_text = st.empty()
+    start_time = time.time()  # Track start time
 
-    ranked_trades = rank_best_trades(stocks)  # ✅ Only the top 10 trades are returned
+    st.subheader("⏳ Scanning for the Best Breakout Setups...")
+    
+    # ✅ Start Processing
+    ranked_trades = rank_best_trades(stocks)  # ✅ Only fetch the Top 10 Best Breakout Trades
 
-    for i in range(len(stocks)):
-        progress_bar.progress((i + 1) / len(stocks))
+    for i, stock in enumerate(stocks):
+        progress = (i + 1) / len(stocks)
+        progress_bar.progress(progress)
+
+        elapsed_time = time.time() - start_time
+        estimated_time_remaining = (elapsed_time / (i + 1)) * (len(stocks) - (i + 1))
+
+        status_text.text(f"🔍 Scanning {stock}... Estimated time left: {int(estimated_time_remaining)}s")
         time.sleep(0.5)  
 
-    st.success("✅ Scan Complete! Showing Best Pre-Breakout Setups")
+    # ✅ Scan Complete
+    progress_bar.progress(1.0)
+    status_text.text("✅ Scan Complete! Showing Best Pre-Breakout Setups")
 
     # 📊 Display Ranked Setups in Table
     st.subheader("🏆 Top 10 Pre-Breakout Setups")
