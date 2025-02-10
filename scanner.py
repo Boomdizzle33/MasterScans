@@ -5,16 +5,12 @@ import ta
 from datetime import datetime, timedelta
 from config import POLYGON_API_KEY
 from duckduckgo_search import DDGS  
-from transformers import pipeline
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  
 
-# ✅ Fix: Load FinBERT in Safe Mode (Prevents PyTorch Errors)
-try:
-    finbert = pipeline("text-classification", model="ProsusAI/finbert", device=-1)  
-except Exception as e:
-    print(f"⚠️ FinBERT failed to load: {e}")
-    finbert = None  
+# ✅ Initialize VADER Sentiment Analyzer (No PyTorch Needed)
+analyzer = SentimentIntensityAnalyzer()
 
-# ✅ Fix: Fetch Stock Data from Polygon.io
+# ✅ Fetch Stock Data from Polygon.io
 def fetch_stock_data(ticker, days=100):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
@@ -29,7 +25,7 @@ def fetch_stock_data(ticker, days=100):
         return df
     return None
 
-# ✅ Fix: Fetch News from DuckDuckGo
+# ✅ Fetch News from DuckDuckGo
 def fetch_duckduckgo_news(ticker):
     """Fetches top financial news headlines for a stock using DuckDuckGo."""
     search_query = f"{ticker} stock news"
@@ -40,24 +36,22 @@ def fetch_duckduckgo_news(ticker):
         return [result['title'] + ". " + result.get('body', '') for result in results]  
     return []
 
-# ✅ Fix: Analyze Sentiment Using FinBERT
-def analyze_sentiment_finbert(ticker):
-    """Fetches news and analyzes sentiment using FinBERT."""
+# ✅ Sentiment Score (ONLY News-Based, No Technicals)
+def analyze_sentiment_vader(ticker):
+    """Fetches news and analyzes sentiment using VADER (No PyTorch)."""
     news_articles = fetch_duckduckgo_news(ticker)
-    if not news_articles or finbert is None:
+    if not news_articles:
         return 0  
 
     total_sentiment = 0
     for article in news_articles:
-        result = finbert(article[:512])[0]  
-        sentiment_score = 1 if result['label'] == "positive" else -1 if result['label'] == "negative" else 0
-        total_sentiment += sentiment_score
+        score = analyzer.polarity_scores(article)['compound']  
+        total_sentiment += score
 
-    avg_sentiment = total_sentiment / len(news_articles)
-    
-    return round(avg_sentiment * 100, 2)  
+    avg_sentiment = (total_sentiment / len(news_articles)) * 100  
+    return round(avg_sentiment, 2)  
 
-# ✅ Fix: Wyckoff-Style Accumulation/Distribution Zones
+# ✅ Wyckoff Accumulation/Distribution Zones
 def accumulation_distribution_zone(ticker):
     df = fetch_stock_data(ticker, days=100)
     if df is None:
@@ -73,7 +67,42 @@ def accumulation_distribution_zone(ticker):
         return "Distribution"
     return "Neutral"
 
-# ✅ Fix: Rank & Return Top 10 Pre-Breakout Setups
+# ✅ Relative Volume (RVOL) for Breakout Strength
+def relative_volume(ticker):
+    df = fetch_stock_data(ticker, days=50)
+    if df is None:
+        return 1  
+
+    avg_volume = df["v"].rolling(20).mean().iloc[-1]  
+    rvol = df["v"].iloc[-1] / avg_volume  
+    
+    return round(rvol, 2)  
+
+# ✅ Technical Indicators (RSI, SMA, MACD)
+def technical_confirmation(ticker):
+    df = fetch_stock_data(ticker, days=50)
+    if df is None:
+        return 0  
+
+    df["RSI"] = ta.momentum.RSIIndicator(df["c"], window=14).rsi()
+    df["SMA_50"] = ta.trend.SMAIndicator(df["c"], window=50).sma_indicator()
+    df["SMA_200"] = ta.trend.SMAIndicator(df["c"], window=200).sma_indicator()
+    df["MACD"] = ta.trend.MACD(df["c"]).macd()
+
+    rsi_score = 10 if df["RSI"].iloc[-1] > 50 else -10
+    sma_score = 10 if df["c"].iloc[-1] > df["SMA_50"].iloc[-1] and df["c"].iloc[-1] > df["SMA_200"].iloc[-1] else -10
+    macd_score = 10 if df["MACD"].iloc[-1] > 0 else -10  
+
+    return rsi_score + sma_score + macd_score  
+
+# ✅ Market Condition Filter
+def is_market_favorable():
+    df_vix = fetch_stock_data("VIX", days=50)  
+    if df_vix is None:
+        return True  
+    return df_vix["c"].iloc[-1] < 20  
+
+# ✅ Rank & Return Top 10 Pre-Breakout Setups
 def rank_best_trades(stocks):
     trade_data = []
 
@@ -87,12 +116,18 @@ def rank_best_trades(stocks):
         stop_loss = entry_price - (df['c'].std() * 2)
         exit_target = entry_price + (3 * (entry_price - stop_loss))  
 
-        sentiment_score = analyze_sentiment_finbert(stock)  
+        sentiment_score = analyze_sentiment_vader(stock)  
         ad_zone = accumulation_distribution_zone(stock)
+        relative_vol = relative_volume(stock)
+        market_favorable = is_market_favorable()
+        tech_score = technical_confirmation(stock)
 
         confidence = (
-            (sentiment_score * 0.2) +
-            (15 if ad_zone == "Accumulation" else -10 if ad_zone == "Distribution" else 0)
+            (sentiment_score * 0.2) +  # ✅ Sentiment Score (20%)
+            (relative_vol * 10) +      # ✅ Relative Volume (10%)
+            (10 if market_favorable else 0) +  # ✅ Market Favorability (10%)
+            (15 if ad_zone == "Accumulation" else -10 if ad_zone == "Distribution" else 0) +  # ✅ Wyckoff Accumulation (15%)
+            tech_score  # ✅ Technical Score (RSI, MACD, SMA)
         )
 
         trade_data.append({
@@ -100,8 +135,11 @@ def rank_best_trades(stocks):
             "Entry": round(entry_price, 2),
             "Stop Loss": round(stop_loss, 2),
             "Exit Target": round(exit_target, 2),
+            "Relative Volume": relative_vol,
+            "Market Favorable": market_favorable,
             "Wyckoff Zone": ad_zone,
             "Sentiment Score": sentiment_score,
+            "Technical Score": tech_score,
             "Confidence %": round(confidence, 2)
         })
 
