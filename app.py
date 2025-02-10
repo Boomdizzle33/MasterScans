@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
-from scanner import detect_patterns, dynamic_support_resistance, analyze_sentiment, momentum_confirmation, stop_loss_exit
+from scanner import rank_best_trades
 
 # Streamlit Title
-st.title("🚀 AI-Powered Swing Trading Scanner")
+st.title("🚀 AI-Powered Swing Trading Scanner - Top 10 Pre-Breakout Setups")
 
 # File Uploader for CSV
 uploaded_file = st.file_uploader("Upload TradingView Stock List (CSV)", type=["csv"])
@@ -12,32 +12,28 @@ if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     
     if "Ticker" in df.columns:
-        stocks = df["Ticker"].tolist()  # Use "Ticker" from TradingView CSV
+        stocks = df["Ticker"].tolist()  # ✅ Use "Ticker" from TradingView CSV
     else:
         st.error("CSV file must contain a 'Ticker' column.")
-        st.stop()  # Stop execution if columns are missing
+        st.stop()
 
-    for stock in stocks:
-        st.subheader(f"📌 {stock}")
-        
-        patterns = detect_patterns(stock)
-        if patterns:
-            st.info(f"📊 Patterns Detected: {patterns}")
+    # ✅ Rank the best trades
+    ranked_trades = rank_best_trades(stocks)
 
-        if dynamic_support_resistance(stock):
-            st.success("🔥 Stock Near Breakout Zone")
+    # ✅ Display the results in a Streamlit DataFrame
+    st.subheader("🏆 Top 10 Pre-Breakout Setups")
+    st.dataframe(pd.DataFrame(ranked_trades))
 
-        if analyze_sentiment(stock):
-            st.success("📈 AI Confirms Bullish Sentiment")
-
-        if momentum_confirmation(stock):
-            st.success("⚡ Momentum Confirmation (RSI, MACD)")
-
-        stop_loss = stop_loss_exit(stock)
-        if stop_loss:
-            st.warning(f"🚨 AI Stop-Loss: ${stop_loss:.2f}")
-
-    st.write("📊 AI-Confirmed Pre-Breakout Stocks Ready for Trade.")
+    # ✅ Display insights
+    for trade in ranked_trades:
+        st.markdown(f"""
+        **📌 {trade["Stock"]}**  
+        - **Entry Price:** ${trade["Entry"]}  
+        - **Stop Loss:** ${trade["Stop Loss"]}  
+        - **Exit Target:** ${trade["Exit Target"]}  
+        - **Sentiment Score:** {trade["Sentiment Score"]}  
+        - **Confidence:** {trade["Confidence %"]}%  
+        """)
 
 
 
