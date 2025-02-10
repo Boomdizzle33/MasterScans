@@ -2,11 +2,12 @@ pandas
 numpy
 requests
 polygon-api-client
-openai
 ta
 streamlit
 matplotlib
 seaborn
 yfinance
 python-dotenv
+duckduckgo-search
+vaderSentiment
 
