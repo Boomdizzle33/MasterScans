@@ -6,7 +6,7 @@ ta
 streamlit
 python-dotenv
 duckduckgo-search
-transformers
-torch
+vaderSentiment  # ✅ Now using VADER for sentiment analysis
+
 
 
