@@ -16,32 +16,18 @@ if uploaded_file is not None:
         st.error("CSV file must contain a 'Ticker' column.")
         st.stop()
 
-    progress_bar = st.progress(0)  # ✅ Initialize progress bar
-    status_text = st.empty()  # ✅ Text area to update progress status
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
-    num_stocks = len(stocks)
-    ranked_trades = []
+    ranked_trades = rank_best_trades(stocks)
 
-    # ✅ Process each stock & update progress bar dynamically
-    for i, stock in enumerate(stocks):
-        start_time = time.time()
+    for i, _ in enumerate(stocks):
+        progress_bar.progress((i + 1) / len(stocks))
+        time.sleep(0.5)  
 
-        # ✅ Analyze stock & add to ranked trades
-        ranked_trades.extend(rank_best_trades([stock]))
-
-        # ✅ Update progress
-        progress = (i + 1) / num_stocks
-        progress_bar.progress(progress)
-
-        # ✅ Update status text with remaining time estimate
-        elapsed_time = time.time() - start_time
-        remaining_time = (num_stocks - (i + 1)) * elapsed_time
-
-        status_text.text(f"🔍 Analyzing {stock}... Estimated time left: {int(remaining_time)}s")
-
-    # ✅ Show results after processing all stocks
     st.subheader("🏆 Top 10 Pre-Breakout Setups")
     st.dataframe(pd.DataFrame(ranked_trades))
-
+    
     st.success("✅ Scan complete!")
+
 
