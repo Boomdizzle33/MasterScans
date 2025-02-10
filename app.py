@@ -1,39 +1,35 @@
-import streamlit as st
-import pandas as pd
-from scanner import rank_best_trades
+def rank_best_trades(stocks):
+    """Ranks the top 10 stocks based on AI sentiment and momentum."""
+    trade_data = []
 
-# Streamlit Title
-st.title("🚀 AI-Powered Swing Trading Scanner - Top 10 Pre-Breakout Setups")
+    for stock in stocks:
+        df = fetch_stock_data(stock, days=50)
+        if df is None:
+            continue
+        
+        resistance = df['c'].rolling(window=20).max().iloc[-1]
+        entry_price = resistance * 1.01  # ✅ Enter slightly above breakout level
+        atr = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range().iloc[-1]
+        stop_loss = resistance - (2 * atr)  # ✅ Stop-loss at 2x ATR below breakout level
+        exit_target = entry_price + (2 * (entry_price - stop_loss))  # ✅ 2:1 Risk-Reward
+        
+        sentiment_score = analyze_news_with_ai(stock)  # ✅ AI-powered sentiment
+        momentum = momentum_confirmation(stock)
+        confidence = (sentiment_score + (100 if momentum else 50)) / 2  # ✅ Confidence Score Calculation
+        
+        trade_data.append({
+            "Stock": stock,
+            "Entry": round(entry_price, 2),
+            "Stop Loss": round(stop_loss, 2),
+            "Exit Target": round(exit_target, 2),
+            "Sentiment Score": sentiment_score,
+            "Confidence %": round(confidence, 2)
+        })
 
-# File Uploader for CSV
-uploaded_file = st.file_uploader("Upload TradingView Stock List (CSV)", type=["csv"])
-
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+    # ✅ Sort trades by confidence and return the top 10
+    trade_data = sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:10]
     
-    if "Ticker" in df.columns:
-        stocks = df["Ticker"].tolist()  # ✅ Use "Ticker" from TradingView CSV
-    else:
-        st.error("CSV file must contain a 'Ticker' column.")
-        st.stop()
-
-    # ✅ Rank the best trades
-    ranked_trades = rank_best_trades(stocks)
-
-    # ✅ Display the results in a Streamlit DataFrame
-    st.subheader("🏆 Top 10 Pre-Breakout Setups")
-    st.dataframe(pd.DataFrame(ranked_trades))
-
-    # ✅ Display insights
-    for trade in ranked_trades:
-        st.markdown(f"""
-        **📌 {trade["Stock"]}**  
-        - **Entry Price:** ${trade["Entry"]}  
-        - **Stop Loss:** ${trade["Stop Loss"]}  
-        - **Exit Target:** ${trade["Exit Target"]}  
-        - **Sentiment Score:** {trade["Sentiment Score"]}  
-        - **Confidence:** {trade["Confidence %"]}%  
-        """)
+    return trade_data
 
 
 
