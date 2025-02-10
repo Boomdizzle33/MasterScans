@@ -4,13 +4,8 @@ requests
 polygon-api-client
 ta
 streamlit
-matplotlib
-seaborn
-yfinance
 python-dotenv
 duckduckgo-search
-vaderSentiment
-torch
 transformers
-beautifulsoup4
+torch
 
