@@ -37,18 +37,18 @@ def analyze_sentiment(ticker):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an AI that analyzes stock news sentiment."},
-                {"role": "user", "content": f"Analyze the sentiment of this news: {news}"}
+                {"role": "system", "content": "You are an AI that analyzes stock news sentiment and assigns a sentiment score from -100 to +100."},
+                {"role": "user", "content": f"Analyze the sentiment of this news and return a sentiment score from -100 (very bearish) to +100 (very bullish): {news}"}
             ],
             temperature=0.5
         )
 
-        sentiment = response.choices[0].message.content.strip().lower()
-        return "bullish" in sentiment or "positive" in sentiment  # ✅ Returns True if sentiment is bullish
+        sentiment_score = int(response.choices[0].message.content.strip())  # AI provides a score
+        return sentiment_score
 
     except openai.OpenAIError as e:
         print(f"⚠️ OpenAI API Error: {e}")
-        return False  # ✅ Default to False if API call fails
+        return 0  # Default to neutral sentiment (0) if API call fails
 
 # ✅ Detect AI-based breakout patterns
 def detect_patterns(ticker):
@@ -79,28 +79,38 @@ def dynamic_support_resistance(ticker):
 
     return df['c'].iloc[-1] >= (0.98 * df['Resistance'].iloc[-1])
 
-# ✅ Confirm breakout with momentum indicators
-def momentum_confirmation(ticker):
-    """Checks RSI, MACD, and ATR expansion for confirmation."""
-    df = fetch_stock_data(ticker, days=50)
-    if df is None:
-        return None
+# ✅ Rank and return the top 10 setups
+def rank_best_trades(stocks):
+    """Ranks the top 10 stocks based on AI confidence, momentum, and sentiment."""
+    trade_data = []
 
-    df["RSI"] = ta.momentum.RSIIndicator(df["c"]).rsi()
-    df["MACD"] = ta.trend.MACD(df["c"]).macd()
-    df["ATR"] = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range()
+    for stock in stocks:
+        df = fetch_stock_data(stock, days=50)
+        if df is None:
+            continue
+        
+        resistance = df['c'].rolling(window=20).max().iloc[-1]
+        entry_price = resistance * 1.01  # ✅ Enter slightly above breakout level
+        atr = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range().iloc[-1]
+        stop_loss = resistance - (2 * atr)  # ✅ Stop-loss at 2x ATR below breakout level
+        exit_target = entry_price + (2 * (entry_price - stop_loss))  # ✅ 2:1 Risk-Reward
+        
+        sentiment_score = analyze_sentiment(stock)
+        momentum = momentum_confirmation(stock)
+        confidence = (sentiment_score + (100 if momentum else 50)) / 2  # ✅ Confidence Score Calculation
+        
+        trade_data.append({
+            "Stock": stock,
+            "Entry": round(entry_price, 2),
+            "Stop Loss": round(stop_loss, 2),
+            "Exit Target": round(exit_target, 2),
+            "Sentiment Score": sentiment_score,
+            "Confidence %": round(confidence, 2)
+        })
 
-    return df["RSI"].iloc[-1] > 60 and df["MACD"].iloc[-1] > df["MACD"].iloc[-2]
-
-# ✅ AI-based stop-loss calculation
-def stop_loss_exit(ticker):
-    """Calculates AI-based stop-loss using ATR and swing lows."""
-    df = fetch_stock_data(ticker, days=50)
-    if df is None:
-        return None
-
-    df["ATR"] = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range()
-    return df["c"].iloc[-1] - (2 * df["ATR"].iloc[-1])
-
+    # ✅ Sort trades by confidence and return the top 10
+    trade_data = sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:10]
+    
+    return trade_data
 
 
