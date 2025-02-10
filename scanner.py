@@ -3,12 +3,15 @@ import pandas as pd
 import numpy as np
 import ta
 import openai
+from openai import OpenAI
 from datetime import datetime, timedelta
 from polygon import RESTClient
 from config import POLYGON_API_KEY, OPENAI_API_KEY
-from openai._exceptions import OpenAIError  # Fixed error handling
 
-# Fetch stock data from Polygon.io
+# ✅ Initialize OpenAI client (Required for OpenAI v1.0+)
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# ✅ Fetch stock data from Polygon.io
 def fetch_stock_data(ticker, days=100):
     """Fetches historical stock data from Polygon.io."""
     end_date = datetime.now()
@@ -24,15 +27,14 @@ def fetch_stock_data(ticker, days=100):
         return df
     return None
 
-# AI-powered news sentiment analysis (Fixed for OpenAI v1)
+# ✅ AI-powered news sentiment analysis (Fixed for OpenAI v1.0+)
 def analyze_sentiment(ticker):
     """Uses OpenAI GPT-4 to analyze stock news sentiment."""
-    openai.api_key = OPENAI_API_KEY  # Ensure API key is set properly
-
+    
     news = f"Latest earnings & headlines for {ticker}"
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an AI that analyzes stock news sentiment."},
@@ -41,14 +43,14 @@ def analyze_sentiment(ticker):
             temperature=0.5
         )
 
-        sentiment = response["choices"][0]["message"]["content"].strip().lower()
-        return "bullish" in sentiment or "positive" in sentiment  # Return True if sentiment is bullish
+        sentiment = response.choices[0].message.content.strip().lower()
+        return "bullish" in sentiment or "positive" in sentiment  # ✅ Returns True if sentiment is bullish
 
-    except OpenAIError as e:  # Corrected error handling
-        print(f"OpenAI API Error: {e}")
-        return False  # Default to False if API call fails
+    except openai.OpenAIError as e:
+        print(f"⚠️ OpenAI API Error: {e}")
+        return False  # ✅ Default to False if API call fails
 
-# Detect AI-based breakout patterns
+# ✅ Detect AI-based breakout patterns
 def detect_patterns(ticker):
     """Detects bullish chart patterns using AI & technical analysis."""
     df = fetch_stock_data(ticker, days=200)
@@ -65,7 +67,7 @@ def detect_patterns(ticker):
 
     return patterns if patterns else None
 
-# AI-driven support & resistance
+# ✅ AI-driven support & resistance
 def dynamic_support_resistance(ticker):
     """Detects AI-driven support & resistance levels."""
     df = fetch_stock_data(ticker, days=100)
@@ -77,7 +79,7 @@ def dynamic_support_resistance(ticker):
 
     return df['c'].iloc[-1] >= (0.98 * df['Resistance'].iloc[-1])
 
-# Confirm breakout with momentum indicators
+# ✅ Confirm breakout with momentum indicators
 def momentum_confirmation(ticker):
     """Checks RSI, MACD, and ATR expansion for confirmation."""
     df = fetch_stock_data(ticker, days=50)
@@ -90,7 +92,7 @@ def momentum_confirmation(ticker):
 
     return df["RSI"].iloc[-1] > 60 and df["MACD"].iloc[-1] > df["MACD"].iloc[-2]
 
-# AI-based stop-loss calculation
+# ✅ AI-based stop-loss calculation
 def stop_loss_exit(ticker):
     """Calculates AI-based stop-loss using ATR and swing lows."""
     df = fetch_stock_data(ticker, days=50)
@@ -99,5 +101,6 @@ def stop_loss_exit(ticker):
 
     df["ATR"] = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range()
     return df["c"].iloc[-1] - (2 * df["ATR"].iloc[-1])
+
 
 
