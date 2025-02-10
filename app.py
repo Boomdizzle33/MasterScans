@@ -25,20 +25,15 @@ if uploaded_file is not None:
     status_text = st.empty()
 
     start_time = time.time()  
-    ranked_trades = rank_best_trades(stocks)  
 
-    for i in range(len(stocks)):
-        progress_bar.progress((i + 1) / len(stocks))
-        elapsed_time = time.time() - start_time
-        estimated_time_remaining = (elapsed_time / (i + 1)) * (len(stocks) - (i + 1))
-        status_text.text(f"🔍 Scanning {stocks[i]}... Estimated time left: {int(estimated_time_remaining)}s")
-        time.sleep(0.5)  
+    # ✅ NEW: Track progress inside rank_best_trades()
+    ranked_trades = rank_best_trades(stocks, top_n=20, progress_bar=progress_bar, status_text=status_text)
 
     progress_bar.progress(1.0)
     status_text.text("✅ Scan Complete! Showing Best Pre-Breakout Setups")
 
-    # ✅ Display Table of Top 10 Setups
-    st.subheader("🏆 Top 10 Pre-Breakout Setups")
+    # ✅ Display Table of Top 20 Setups
+    st.subheader("🏆 Top 20 Pre-Breakout Setups")
 
     table_data = pd.DataFrame(ranked_trades, columns=[
         "Stock", "Entry", "Stop Loss", "Exit Target",
@@ -48,6 +43,7 @@ if uploaded_file is not None:
     st.dataframe(table_data)
 
     st.success("🎯 Scan Complete! Ready to Trade!")
+
 
 
 
