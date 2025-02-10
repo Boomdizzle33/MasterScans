@@ -27,7 +27,6 @@ def fetch_stock_data(ticker, days=100):
 
 # ✅ Fetch News from DuckDuckGo
 def fetch_duckduckgo_news(ticker):
-    """Fetches top financial news headlines for a stock using DuckDuckGo."""
     search_query = f"{ticker} stock news"
     ddgs = DDGS()
     results = list(ddgs.news(search_query, max_results=5)) 
@@ -38,7 +37,6 @@ def fetch_duckduckgo_news(ticker):
 
 # ✅ Sentiment Score (ONLY News-Based, No Technicals)
 def analyze_sentiment_vader(ticker):
-    """Fetches news and analyzes sentiment using VADER (No PyTorch)."""
     news_articles = fetch_duckduckgo_news(ticker)
     if not news_articles:
         return 0  
@@ -84,16 +82,16 @@ def technical_confirmation(ticker):
     if df is None:
         return 0  
 
-    df["RSI"] = ta.momentum.RSIIndicator(df["c"], window=14).rsi()
-    df["SMA_50"] = ta.trend.SMAIndicator(df["c"], window=50).sma_indicator()
-    df["SMA_200"] = ta.trend.SMAIndicator(df["c"], window=200).sma_indicator()
+    df["RSI"] = ta.momentum.RSIIndicator(df["c"]).rsi()
+    df["50_SMA"] = df["c"].rolling(50).mean()
+    df["200_SMA"] = df["c"].rolling(200).mean()
     df["MACD"] = ta.trend.MACD(df["c"]).macd()
 
-    rsi_score = 10 if df["RSI"].iloc[-1] > 50 else -10
-    sma_score = 10 if df["c"].iloc[-1] > df["SMA_50"].iloc[-1] and df["c"].iloc[-1] > df["SMA_200"].iloc[-1] else -10
-    macd_score = 10 if df["MACD"].iloc[-1] > 0 else -10  
-
-    return rsi_score + sma_score + macd_score  
+    return (
+        (10 if df["RSI"].iloc[-1] > 50 else -10) +
+        (10 if df["c"].iloc[-1] > df["50_SMA"].iloc[-1] > df["200_SMA"].iloc[-1] else -10) +
+        (10 if df["MACD"].iloc[-1] > 0 else -10)
+    )
 
 # ✅ Market Condition Filter
 def is_market_favorable():
@@ -102,11 +100,15 @@ def is_market_favorable():
         return True  
     return df_vix["c"].iloc[-1] < 20  
 
-# ✅ Rank & Return Top 10 Pre-Breakout Setups
-def rank_best_trades(stocks):
+# ✅ Rank & Return Top 20 Pre-Breakout Setups
+def rank_best_trades(stocks, top_n=20, progress_bar=None, status_text=None):
     trade_data = []
 
-    for stock in stocks:
+    for i, stock in enumerate(stocks):
+        if progress_bar and status_text:
+            progress_bar.progress((i + 1) / len(stocks))
+            status_text.text(f"🔍 Scanning {stock} ({i+1}/{len(stocks)})...")
+
         df = fetch_stock_data(stock, days=50)
         if df is None:
             continue
@@ -123,11 +125,11 @@ def rank_best_trades(stocks):
         tech_score = technical_confirmation(stock)
 
         confidence = (
-            (sentiment_score * 0.2) +  # ✅ Sentiment Score (20%)
-            (relative_vol * 10) +      # ✅ Relative Volume (10%)
-            (10 if market_favorable else 0) +  # ✅ Market Favorability (10%)
-            (15 if ad_zone == "Accumulation" else -10 if ad_zone == "Distribution" else 0) +  # ✅ Wyckoff Accumulation (15%)
-            tech_score  # ✅ Technical Score (RSI, MACD, SMA)
+            (sentiment_score * 0.2) +
+            (relative_vol * 10) +  
+            (10 if market_favorable else 0) +
+            (15 if ad_zone == "Accumulation" else -10 if ad_zone == "Distribution" else 0) +
+            tech_score  
         )
 
         trade_data.append({
@@ -143,6 +145,7 @@ def rank_best_trades(stocks):
             "Confidence %": round(confidence, 2)
         })
 
-    return sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:10]
+    return sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:top_n]
+
 
 
