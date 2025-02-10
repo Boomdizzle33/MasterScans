@@ -102,6 +102,7 @@ def is_market_favorable():
 
 # ✅ Rank & Return Top 20 Pre-Breakout Setups
 def rank_best_trades(stocks, top_n=20, progress_bar=None, status_text=None):
+    """Ranks and returns the top N pre-breakout setups."""
     trade_data = []
 
     for i, stock in enumerate(stocks):
