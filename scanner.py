@@ -106,4 +106,3 @@ def rank_best_trades(stocks):
     return sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:10]
 
 
-
