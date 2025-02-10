@@ -10,4 +10,7 @@ yfinance
 python-dotenv
 duckduckgo-search
 vaderSentiment
+torch
+transformers
+beautifulsoup4
 
