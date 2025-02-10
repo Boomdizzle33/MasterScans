@@ -1,8 +1,7 @@
-
 import requests
 import pandas as pd
 import numpy as np
-import talib
+import ta
 import openai
 from datetime import datetime, timedelta
 from polygon import RESTClient
@@ -40,20 +39,20 @@ def analyze_sentiment(ticker):
 
 # Detect AI-based breakout patterns
 def detect_patterns(ticker):
-    """Detects Cup & Handle, Bull Flags, and Ascending Triangles."""
+    """Detects bullish chart patterns using AI & technical analysis."""
     df = fetch_stock_data(ticker, days=200)
     if df is None:
         return None
 
-    close, high, low = df["c"].values, df["h"].values, df["l"].values
+    df["20SMA"] = ta.trend.SMAIndicator(df["c"], window=20).sma_indicator()
+    df["50SMA"] = ta.trend.SMAIndicator(df["c"], window=50).sma_indicator()
 
-    patterns = {
-        "Cup & Handle": talib.CDLHOMINGPIGEON(close, high, low),
-        "Bull Flag": talib.CDLBULLTRAP(close, high, low),
-        "Ascending Triangle": talib.CDLPIERCING(close, high, low),
-    }
+    patterns = []
+    
+    if df["c"].iloc[-1] > df["20SMA"].iloc[-1] and df["20SMA"].iloc[-1] > df["50SMA"].iloc[-1]:
+        patterns.append("Bullish Trend Detected")
 
-    return [pattern for pattern, result in patterns.items() if result[-1] > 0] or None
+    return patterns if patterns else None
 
 # AI-driven support & resistance
 def dynamic_support_resistance(ticker):
@@ -74,11 +73,11 @@ def momentum_confirmation(ticker):
     if df is None:
         return None
 
-    df['RSI'] = talib.RSI(df['c'], timeperiod=14)
-    df['MACD'], _, _ = talib.MACD(df['c'], fastperiod=12, slowperiod=26, signalperiod=9)
-    df['ATR'] = talib.ATR(df['h'], df['l'], df['c'], timeperiod=14)
+    df["RSI"] = ta.momentum.RSIIndicator(df["c"]).rsi()
+    df["MACD"] = ta.trend.MACD(df["c"]).macd()
+    df["ATR"] = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range()
 
-    return df['RSI'].iloc[-1] > 60 and df['MACD'].iloc[-1] > df['MACD'].iloc[-2]
+    return df["RSI"].iloc[-1] > 60 and df["MACD"].iloc[-1] > df["MACD"].iloc[-2]
 
 # AI-based stop-loss calculation
 def stop_loss_exit(ticker):
@@ -87,5 +86,5 @@ def stop_loss_exit(ticker):
     if df is None:
         return None
 
-    df['ATR'] = talib.ATR(df['h'], df['l'], df['c'], timeperiod=14)
-    return df['c'].iloc[-1] - (2 * df['ATR'].iloc[-1])
+    df["ATR"] = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range()
+    return df["c"].iloc[-1] - (2 * df["ATR"].iloc[-1])
