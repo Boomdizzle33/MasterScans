@@ -1,35 +1,25 @@
-def rank_best_trades(stocks):
-    """Ranks the top 10 stocks based on AI sentiment and momentum."""
-    trade_data = []
+import streamlit as st
+import pandas as pd
+from scanner import rank_best_trades
 
-    for stock in stocks:
-        df = fetch_stock_data(stock, days=50)
-        if df is None:
-            continue
-        
-        resistance = df['c'].rolling(window=20).max().iloc[-1]
-        entry_price = resistance * 1.01  # ✅ Enter slightly above breakout level
-        atr = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range().iloc[-1]
-        stop_loss = resistance - (2 * atr)  # ✅ Stop-loss at 2x ATR below breakout level
-        exit_target = entry_price + (2 * (entry_price - stop_loss))  # ✅ 2:1 Risk-Reward
-        
-        sentiment_score = analyze_news_with_ai(stock)  # ✅ AI-powered sentiment
-        momentum = momentum_confirmation(stock)
-        confidence = (sentiment_score + (100 if momentum else 50)) / 2  # ✅ Confidence Score Calculation
-        
-        trade_data.append({
-            "Stock": stock,
-            "Entry": round(entry_price, 2),
-            "Stop Loss": round(stop_loss, 2),
-            "Exit Target": round(exit_target, 2),
-            "Sentiment Score": sentiment_score,
-            "Confidence %": round(confidence, 2)
-        })
+# Streamlit Title
+st.title("🚀 AI-Powered Swing Trading Scanner - Top 10 Pre-Breakout Setups")
 
-    # ✅ Sort trades by confidence and return the top 10
-    trade_data = sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:10]
+# File Uploader for CSV
+uploaded_file = st.file_uploader("Upload TradingView Stock List (CSV)", type=["csv"])
+
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
     
-    return trade_data
+    if "Ticker" in df.columns:
+        stocks = df["Ticker"].tolist()
+    else:
+        st.error("CSV file must contain a 'Ticker' column.")
+        st.stop()
 
+    ranked_trades = rank_best_trades(stocks)
+
+    st.subheader("🏆 Top 10 Pre-Breakout Setups")
+    st.dataframe(pd.DataFrame(ranked_trades))
 
 
