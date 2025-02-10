@@ -5,7 +5,7 @@ import ta
 from datetime import datetime, timedelta
 from polygon import RESTClient
 from config import POLYGON_API_KEY
-from duckduckgo_search import ddg_news
+from duckduckgo_search import DDGS  # ✅ Fixed DuckDuckGo import
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # ✅ Initialize Sentiment Analyzer
@@ -27,11 +27,12 @@ def fetch_stock_data(ticker, days=100):
         return df
     return None
 
-# ✅ Fetch News from DuckDuckGo
+# ✅ Fetch News from DuckDuckGo (FIXED)
 def fetch_duckduckgo_news(ticker):
     """Fetches top financial news headlines for a stock using DuckDuckGo."""
     search_query = f"{ticker} stock news"
-    results = ddg_news(search_query, max_results=5)  
+    ddgs = DDGS()  # ✅ Initialize the DuckDuckGo search object
+    results = list(ddgs.news(search_query, max_results=5))  # ✅ Fixed method to get news
     
     if results:
         return [result['title'] + ". " + result.get('body', '') for result in results]  
