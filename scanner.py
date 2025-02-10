@@ -6,6 +6,7 @@ import openai
 from datetime import datetime, timedelta
 from polygon import RESTClient
 from config import POLYGON_API_KEY, OPENAI_API_KEY
+from openai._exceptions import OpenAIError  # Fixed error handling
 
 # Fetch stock data from Polygon.io
 def fetch_stock_data(ticker, days=100):
@@ -43,7 +44,7 @@ def analyze_sentiment(ticker):
         sentiment = response["choices"][0]["message"]["content"].strip().lower()
         return "bullish" in sentiment or "positive" in sentiment  # Return True if sentiment is bullish
 
-    except openai.error.OpenAIError as e:
+    except OpenAIError as e:  # Corrected error handling
         print(f"OpenAI API Error: {e}")
         return False  # Default to False if API call fails
 
