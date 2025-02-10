@@ -25,9 +25,9 @@ if uploaded_file is not None:
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    ranked_trades = rank_best_trades(stocks)
+    ranked_trades = rank_best_trades(stocks)  # ✅ Only the top 10 trades are returned
 
-    for i, _ in enumerate(stocks):
+    for i in range(len(stocks)):
         progress_bar.progress((i + 1) / len(stocks))
         time.sleep(0.5)  
 
