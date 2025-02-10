@@ -2,14 +2,14 @@ import requests
 import pandas as pd
 import numpy as np
 import ta
-import openai
-from openai import OpenAI
 from datetime import datetime, timedelta
 from polygon import RESTClient
-from config import POLYGON_API_KEY, OPENAI_API_KEY
+from config import POLYGON_API_KEY
+from duckduckgo_search import ddg_news
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# ✅ Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
+# ✅ Initialize Sentiment Analyzer
+analyzer = SentimentIntensityAnalyzer()
 
 # ✅ Fetch Stock Data from Polygon.io
 def fetch_stock_data(ticker, days=100):
@@ -27,49 +27,32 @@ def fetch_stock_data(ticker, days=100):
         return df
     return None
 
-# ✅ Fetch News from Polygon.io
-def fetch_polygon_news(ticker):
-    """Fetches latest news articles for a stock from Polygon.io."""
-    url = f"https://api.polygon.io/v2/reference/news?ticker={ticker}&limit=5&apiKey={POLYGON_API_KEY}"
+# ✅ Fetch News from DuckDuckGo
+def fetch_duckduckgo_news(ticker):
+    """Fetches top financial news headlines for a stock using DuckDuckGo."""
+    search_query = f"{ticker} stock news"
+    results = ddg_news(search_query, max_results=5)  
     
-    response = requests.get(url).json()
-    if 'results' in response:
-        return response['results']  # Returns news articles
-    return None
+    if results:
+        return [result['title'] + ". " + result.get('body', '') for result in results]  
+    return []
 
-# ✅ AI-Powered Sentiment Analysis (Using GPT-4)
-def analyze_news_with_ai(ticker):
-    """Uses OpenAI GPT-4 to analyze news sentiment from Polygon.io."""
+# ✅ Analyze Sentiment with VADER NLP
+def analyze_sentiment_duckduckgo(ticker):
+    """Analyzes sentiment of stock news headlines using DuckDuckGo & VADER NLP."""
     
-    news_articles = fetch_polygon_news(ticker)
-    if not news_articles:
-        return 0  # No news available
-    
-    headlines = [f"Title: {article['title']}. Summary: {article['description']}" for article in news_articles if article.get('title') and article.get('description')]
-
-    if not headlines:
-        return 0  # No valid news
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a financial analyst that analyzes stock news sentiment. Return a score between -100 (bearish) to +100 (bullish). Do NOT return any explanations."},
-                {"role": "user", "content": f"Analyze the sentiment of these news articles:\n{headlines}"}
-            ],
-            temperature=0.5
-        )
-
-        sentiment_response = response.choices[0].message.content.strip()
-
-        if sentiment_response.lstrip('-').isdigit():
-            return int(sentiment_response)
-        else:
-            return 0  
-
-    except openai.OpenAIError as e:
-        print(f"⚠️ OpenAI API Error: {e}")
+    news_headlines = fetch_duckduckgo_news(ticker)
+    if not news_headlines:
         return 0  
+
+    total_sentiment = 0
+    for headline in news_headlines:
+        sentiment_score = analyzer.polarity_scores(headline)["compound"]  
+        total_sentiment += sentiment_score
+
+    avg_sentiment = total_sentiment / len(news_headlines)
+    
+    return round(avg_sentiment * 100, 2)  
 
 # ✅ Detect Volume Contraction Before Breakout
 def volume_contraction(ticker):
@@ -105,7 +88,7 @@ def rank_best_trades(stocks):
         stop_loss = dynamic_stop_loss(stock)
         exit_target = entry_price + (3 * (entry_price - stop_loss))  
 
-        sentiment_score = analyze_news_with_ai(stock)
+        sentiment_score = analyze_sentiment_duckduckgo(stock)  
         volume_contraction_flag = volume_contraction(stock)
 
         confidence = (sentiment_score * 0.3) + (50 if volume_contraction_flag else 30) + 20  
@@ -120,7 +103,6 @@ def rank_best_trades(stocks):
         })
 
     return sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:10]
-
 
 
 
