@@ -11,18 +11,12 @@ uploaded_file = st.file_uploader("Upload TradingView Stock List (CSV)", type=["c
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     
-    # Ensure the CSV file contains a valid column name
     if "Ticker" in df.columns:
         stocks = df["Ticker"].tolist()  # Use "Ticker" from TradingView CSV
-    elif "Tickers" in df.columns:
-        stocks = df["Tickers"].tolist()
-    elif "Symbol" in df.columns:
-        stocks = df["Symbol"].tolist()
     else:
-        st.error("CSV file must contain either a 'Ticker', 'Tickers', or 'Symbol' column.")
+        st.error("CSV file must contain a 'Ticker' column.")
         st.stop()  # Stop execution if columns are missing
 
-    # Process stocks
     for stock in stocks:
         st.subheader(f"📌 {stock}")
         
@@ -44,6 +38,7 @@ if uploaded_file is not None:
             st.warning(f"🚨 AI Stop-Loss: ${stop_loss:.2f}")
 
     st.write("📊 AI-Confirmed Pre-Breakout Stocks Ready for Trade.")
+
 
 
 
