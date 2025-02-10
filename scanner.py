@@ -3,22 +3,19 @@ import pandas as pd
 import numpy as np
 import ta
 from datetime import datetime, timedelta
-from polygon import RESTClient
 from config import POLYGON_API_KEY
 from duckduckgo_search import DDGS  
 from transformers import pipeline
-from bs4 import BeautifulSoup
 
-# ✅ Load FinBERT Model (Preventing Crashes)
+# ✅ Load FinBERT in Safe Mode (Prevents PyTorch Errors)
 try:
-    finbert = pipeline("text-classification", model="ProsusAI/finbert", device=-1)  # Run on CPU (safe mode)
+    finbert = pipeline("text-classification", model="ProsusAI/finbert", device=-1)  
 except Exception as e:
-    print(f"⚠️ FinBERT loading failed: {e}")
+    print(f"⚠️ FinBERT failed to load: {e}")
     finbert = None  
 
 # ✅ Fetch Stock Data from Polygon.io
 def fetch_stock_data(ticker, days=100):
-    """Fetches historical stock data from Polygon.io."""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
@@ -32,34 +29,39 @@ def fetch_stock_data(ticker, days=100):
         return df
     return None
 
-# ✅ Fetch News from DuckDuckGo
-def fetch_duckduckgo_news(ticker):
-    """Fetches top financial news headlines for a stock using DuckDuckGo."""
-    search_query = f"{ticker} stock news"
-    ddgs = DDGS()
-    results = list(ddgs.news(search_query, max_results=5)) 
-    
-    if results:
-        return [result['title'] + ". " + result.get('body', '') for result in results]  
-    return []
+# ✅ Wyckoff-Style Accumulation/Distribution Zones
+def accumulation_distribution_zone(ticker):
+    df = fetch_stock_data(ticker, days=100)
+    if df is None:
+        return "Neutral"
 
-# ✅ Fetch News from Yahoo Finance
-def fetch_yahoo_finance_news(ticker):
-    """Fetches news from Yahoo Finance."""
-    url = f"https://finance.yahoo.com/quote/{ticker}/news?p={ticker}"
-    headers = {"User-Agent": "Mozilla/5.0"}  
-    
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
-        articles = soup.find_all("h3")
-        return [article.text for article in articles[:5]]  
-    return []
+    # ✅ Calculate A/D Line (Institutional Buying/Selling)
+    df["ADL"] = (2 * df["c"] - df["l"] - df["h"]) / (df["h"] - df["l"]) * df["v"]
+    df["ADL"] = df["ADL"].cumsum()
 
-# ✅ Analyze Sentiment Using FinBERT
+    # ✅ Identify Accumulation/Distribution
+    adl_trend = df["ADL"].diff().rolling(10).mean()
+    
+    if adl_trend.iloc[-1] > 0 and df["c"].std() < df["c"].rolling(20).std().mean() * 0.5:
+        return "Accumulation"  # ✅ Smart money buying
+    elif adl_trend.iloc[-1] < 0 and df["c"].std() > df["c"].rolling(20).std().mean():
+        return "Distribution"  # ❌ Smart money selling
+    return "Neutral"
+
+# ✅ Relative Volume (RVOL) for Breakout Strength
+def relative_volume(ticker):
+    df = fetch_stock_data(ticker, days=50)
+    if df is None:
+        return 1  
+
+    avg_volume = df["v"].rolling(20).mean().iloc[-1]  
+    rvol = df["v"].iloc[-1] / avg_volume  
+    
+    return round(rvol, 2)  
+
+# ✅ Sentiment Analysis Using FinBERT
 def analyze_sentiment_finbert(news_articles):
-    """Analyzes sentiment using FinBERT (better for financial news)."""
-    if not news_articles:
+    if not news_articles or finbert is None:
         return 0  
 
     total_sentiment = 0
@@ -72,32 +74,12 @@ def analyze_sentiment_finbert(news_articles):
     
     return round(avg_sentiment * 100, 2)  
 
-# ✅ Weighted Sentiment Scoring
-def weighted_sentiment_score(ticker):
-    """Calculates a weighted sentiment score based on news type."""
-    
-    general_news = fetch_duckduckgo_news(ticker)  
-    yahoo_news = fetch_yahoo_finance_news(ticker)  
-    
-    sentiment_general = analyze_sentiment_finbert(general_news)
-    sentiment_yahoo = analyze_sentiment_finbert(yahoo_news)
-
-    weighted_score = (
-        (sentiment_general * 0.2) +  
-        (sentiment_yahoo * 0.4)  
-    )
-    
-    return round(weighted_score, 2)
-
-# ✅ Dynamic Stop-Loss Calculation
-def dynamic_stop_loss(ticker):
-    """Calculates a dynamic stop-loss based on volatility (ATR) and volume contraction."""
-    df = fetch_stock_data(ticker, days=50)
-    if df is None:
-        return None
-
-    atr = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range().iloc[-1]
-    return df["c"].iloc[-1] - (1.5 * atr) if True else df["c"].iloc[-1] - (2.5 * atr)
+# ✅ Market Condition Filter
+def is_market_favorable():
+    df_vix = fetch_stock_data("VIX", days=50)  
+    if df_vix is None:
+        return True  
+    return df_vix["c"].iloc[-1] < 20  
 
 # ✅ Rank & Return Top 10 Pre-Breakout Setups
 def rank_best_trades(stocks):
@@ -110,17 +92,30 @@ def rank_best_trades(stocks):
         
         resistance = df['c'].rolling(20).max().iloc[-1]
         entry_price = resistance * 0.99  
-        stop_loss = dynamic_stop_loss(stock)  
+        stop_loss = entry_price - (df['c'].std() * 2)
         exit_target = entry_price + (3 * (entry_price - stop_loss))  
 
-        sentiment_score = weighted_sentiment_score(stock)  
-        confidence = (sentiment_score * 0.25) + 50  
+        sentiment_score = analyze_sentiment_finbert(fetch_duckduckgo_news(stock))  
+        relative_vol = relative_volume(stock)  
+        market_favorable = is_market_favorable()  
+        ad_zone = accumulation_distribution_zone(stock)  # ✅ Wyckoff Zones
+
+        # ✅ New Weighted Confidence Formula (Added A/D Zone)
+        confidence = (
+            (sentiment_score * 0.2) +
+            (relative_vol * 10) +  
+            (20 if market_favorable else 0) +
+            (15 if ad_zone == "Accumulation" else -10 if ad_zone == "Distribution" else 0)  # ✅ Gives priority to accumulation setups
+        )
 
         trade_data.append({
             "Stock": stock,
             "Entry": round(entry_price, 2),
             "Stop Loss": round(stop_loss, 2),
             "Exit Target": round(exit_target, 2),
+            "Relative Volume": relative_vol,
+            "Market Favorable": market_favorable,
+            "Wyckoff Zone": ad_zone,
             "Sentiment Score": sentiment_score,
             "Confidence %": round(confidence, 2)
         })
