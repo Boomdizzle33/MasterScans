@@ -26,7 +26,7 @@ if uploaded_file is not None:
 
     start_time = time.time()  
 
-    # ✅ NEW: Track progress inside rank_best_trades()
+    # ✅ Track progress inside rank_best_trades()
     ranked_trades = rank_best_trades(stocks, top_n=20, progress_bar=progress_bar, status_text=status_text)
 
     progress_bar.progress(1.0)
@@ -43,6 +43,23 @@ if uploaded_file is not None:
     st.dataframe(table_data)
 
     st.success("🎯 Scan Complete! Ready to Trade!")
+
+    # ✅ Export to CSV for TradingView Import
+    st.subheader("📂 Export for TradingView")
+    
+    # ✅ Format for TradingView Import (Only Stock Symbols)
+    tradingview_export = table_data[["Stock"]]
+    tradingview_export.rename(columns={"Stock": "Ticker"}, inplace=True)
+
+    csv = tradingview_export.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="📥 Download CSV for TradingView",
+        data=csv,
+        file_name="tradingview_import.csv",
+        mime="text/csv",
+    )
+
 
 
 
