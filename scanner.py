@@ -5,11 +5,12 @@ import ta
 from datetime import datetime, timedelta
 from polygon import RESTClient
 from config import POLYGON_API_KEY
-from duckduckgo_search import DDGS  # ✅ Fixed DuckDuckGo import
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from duckduckgo_search import DDGS  
+from transformers import pipeline
+from bs4 import BeautifulSoup
 
-# ✅ Initialize Sentiment Analyzer
-analyzer = SentimentIntensityAnalyzer()
+# ✅ Initialize FinBERT Sentiment Model
+finbert = pipeline("text-classification", model="ProsusAI/finbert")
 
 # ✅ Fetch Stock Data from Polygon.io
 def fetch_stock_data(ticker, days=100):
@@ -27,53 +28,62 @@ def fetch_stock_data(ticker, days=100):
         return df
     return None
 
-# ✅ Fetch News from DuckDuckGo (FIXED)
+# ✅ Fetch News from DuckDuckGo
 def fetch_duckduckgo_news(ticker):
     """Fetches top financial news headlines for a stock using DuckDuckGo."""
     search_query = f"{ticker} stock news"
-    ddgs = DDGS()  # ✅ Initialize the DuckDuckGo search object
-    results = list(ddgs.news(search_query, max_results=5))  # ✅ Fixed method to get news
+    ddgs = DDGS()
+    results = list(ddgs.news(search_query, max_results=5)) 
     
     if results:
         return [result['title'] + ". " + result.get('body', '') for result in results]  
     return []
 
-# ✅ Analyze Sentiment with VADER NLP
-def analyze_sentiment_duckduckgo(ticker):
-    """Analyzes sentiment of stock news headlines using DuckDuckGo & VADER NLP."""
+# ✅ Fetch News from Yahoo Finance
+def fetch_yahoo_finance_news(ticker):
+    """Fetches news from Yahoo Finance API."""
+    url = f"https://finance.yahoo.com/quote/{ticker}/news?p={ticker}"
+    headers = {"User-Agent": "Mozilla/5.0"}  
     
-    news_headlines = fetch_duckduckgo_news(ticker)
-    if not news_headlines:
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, "html.parser")
+        articles = soup.find_all("h3")
+        return [article.text for article in articles[:5]]  
+    return []
+
+# ✅ Analyze Sentiment Using FinBERT
+def analyze_sentiment_finbert(news_articles):
+    """Analyzes sentiment using FinBERT (better for financial news)."""
+    if not news_articles:
         return 0  
 
     total_sentiment = 0
-    for headline in news_headlines:
-        sentiment_score = analyzer.polarity_scores(headline)["compound"]  
+    for article in news_articles:
+        result = finbert(article[:512])[0]  
+        sentiment_score = 1 if result['label'] == "positive" else -1 if result['label'] == "negative" else 0
         total_sentiment += sentiment_score
 
-    avg_sentiment = total_sentiment / len(news_headlines)
+    avg_sentiment = total_sentiment / len(news_articles)
     
     return round(avg_sentiment * 100, 2)  
 
-# ✅ Detect Volume Contraction Before Breakout
-def volume_contraction(ticker):
-    df = fetch_stock_data(ticker, days=50)
-    if df is None:
-        return False  
-
-    df["Volume_Slope"] = df["v"].rolling(5).mean().diff()
-    price_consolidation = df["c"].std() < df["c"].rolling(20).std().mean() * 0.5  
+# ✅ Weighted Sentiment Scoring
+def weighted_sentiment_score(ticker):
+    """Calculates a weighted sentiment score based on news type."""
     
-    return (df["Volume_Slope"].iloc[-1] < 0) and price_consolidation
+    general_news = fetch_duckduckgo_news(ticker)  
+    yahoo_news = fetch_yahoo_finance_news(ticker)  
+    
+    sentiment_general = analyze_sentiment_finbert(general_news)
+    sentiment_yahoo = analyze_sentiment_finbert(yahoo_news)
 
-# ✅ Dynamic Stop-Loss Based on Volatility
-def dynamic_stop_loss(ticker):
-    df = fetch_stock_data(ticker, days=50)
-    if df is None:
-        return None
-
-    atr = ta.volatility.AverageTrueRange(df["h"], df["l"], df["c"]).average_true_range().iloc[-1]
-    return df["c"].iloc[-1] - (1.5 * atr) if volume_contraction(ticker) else df["c"].iloc[-1] - (2.5 * atr)
+    weighted_score = (
+        (sentiment_general * 0.2) +  
+        (sentiment_yahoo * 0.4)  
+    )
+    
+    return round(weighted_score, 2)
 
 # ✅ Rank & Return Top 10 Pre-Breakout Setups
 def rank_best_trades(stocks):
@@ -89,10 +99,8 @@ def rank_best_trades(stocks):
         stop_loss = dynamic_stop_loss(stock)
         exit_target = entry_price + (3 * (entry_price - stop_loss))  
 
-        sentiment_score = analyze_sentiment_duckduckgo(stock)  
-        volume_contraction_flag = volume_contraction(stock)
-
-        confidence = (sentiment_score * 0.3) + (50 if volume_contraction_flag else 30) + 20  
+        sentiment_score = weighted_sentiment_score(stock)  
+        confidence = (sentiment_score * 0.25) + 50  
 
         trade_data.append({
             "Stock": stock,
@@ -104,5 +112,6 @@ def rank_best_trades(stocks):
         })
 
     return sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:10]
+
 
 
