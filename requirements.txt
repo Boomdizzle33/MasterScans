@@ -1,0 +1,11 @@
+pandas
+numpy
+requests
+polygon-api-client
+openai
+talib
+ta
+streamlit
+matplotlib
+seaborn
+yfinance
