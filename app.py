@@ -18,13 +18,20 @@ if uploaded_file is not None:
         st.error("❌ CSV file must contain a 'Ticker' column.")
         st.stop()
 
-    progress_bar = st.progress(0)
+    # ✅ Scanner Status Indicator (New)
     status_text = st.empty()
+    status_text.info("⏳ Scanner is initializing...")
 
-    ranked_trades = rank_best_trades(stocks)
+    # ✅ Progress Bar (Live Updates)
+    progress_bar = st.progress(0)
+
+    start_time = time.time()
+
+    with st.spinner("🔍 Scanning stocks, please wait..."):
+        ranked_trades = rank_best_trades(stocks)
 
     progress_bar.progress(1.0)
-    status_text.text("✅ Scan Complete! Showing Best Pre-Breakout Setups")
+    status_text.success("✅ Scan Complete! Showing Best Pre-Breakout Setups")
 
     st.subheader("🏆 Top 20 Pre-Breakout Setups")
 
@@ -41,9 +48,6 @@ if uploaded_file is not None:
         file_name="tradingview_import.csv",
         mime="text/csv",
     )
-
-
-
 
 
 
