@@ -26,8 +26,8 @@ if uploaded_file is not None:
 
     start_time = time.time()  
 
-    # ✅ Track progress inside rank_best_trades()
-    ranked_trades = rank_best_trades(stocks, top_n=20, progress_bar=progress_bar, status_text=status_text)
+    # ✅ Fix: Ensure rank_best_trades() Matches Scanner (Fixes Unexpected Argument Error)
+    ranked_trades = rank_best_trades(stocks, 20, progress_bar, status_text)
 
     progress_bar.progress(1.0)
     status_text.text("✅ Scan Complete! Showing Best Pre-Breakout Setups")
@@ -59,6 +59,7 @@ if uploaded_file is not None:
         file_name="tradingview_import.csv",
         mime="text/csv",
     )
+
 
 
 
