@@ -93,15 +93,8 @@ def technical_confirmation(ticker):
         (10 if df["MACD"].iloc[-1] > 0 else -10)
     )
 
-# ✅ Market Condition Filter
-def is_market_favorable():
-    df_vix = fetch_stock_data("VIX", days=50)  
-    if df_vix is None:
-        return True  
-    return df_vix["c"].iloc[-1] < 20  
-
 # ✅ Rank & Return Top 20 Pre-Breakout Setups
-def rank_best_trades(stocks, top_n=20, progress_bar=None, status_text=None):
+def rank_best_trades(stocks, top_n, progress_bar, status_text):
     """Ranks and returns the top N pre-breakout setups."""
     trade_data = []
 
@@ -113,38 +106,9 @@ def rank_best_trades(stocks, top_n=20, progress_bar=None, status_text=None):
         df = fetch_stock_data(stock, days=50)
         if df is None:
             continue
-        
-        resistance = df['c'].rolling(20).max().iloc[-1]
-        entry_price = resistance * 0.99  
-        stop_loss = entry_price - (df['c'].std() * 2)
-        exit_target = entry_price + (3 * (entry_price - stop_loss))  
 
-        sentiment_score = analyze_sentiment_vader(stock)  
-        ad_zone = accumulation_distribution_zone(stock)
-        relative_vol = relative_volume(stock)
-        market_favorable = is_market_favorable()
-        tech_score = technical_confirmation(stock)
-
-        confidence = (
-            (sentiment_score * 0.2) +
-            (relative_vol * 10) +  
-            (10 if market_favorable else 0) +
-            (15 if ad_zone == "Accumulation" else -10 if ad_zone == "Distribution" else 0) +
-            tech_score  
-        )
-
-        trade_data.append({
-            "Stock": stock,
-            "Entry": round(entry_price, 2),
-            "Stop Loss": round(stop_loss, 2),
-            "Exit Target": round(exit_target, 2),
-            "Relative Volume": relative_vol,
-            "Market Favorable": market_favorable,
-            "Wyckoff Zone": ad_zone,
-            "Sentiment Score": sentiment_score,
-            "Technical Score": tech_score,
-            "Confidence %": round(confidence, 2)
-        })
+        confidence = (analyze_sentiment_vader(stock) * 0.2) + (relative_volume(stock) * 10)
+        trade_data.append({"Stock": stock, "Confidence %": round(confidence, 2)})
 
     return sorted(trade_data, key=lambda x: x["Confidence %"], reverse=True)[:top_n]
 
